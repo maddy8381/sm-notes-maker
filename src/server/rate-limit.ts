@@ -29,6 +29,10 @@ export const RATE_LIMITS = {
   signup: { limit: 5, windowMs: 60 * 60 * 1000 },
   passwordReset: { limit: 4, windowMs: 60 * 60 * 1000 },
   upload: { limit: 100, windowMs: 60 * 60 * 1000 },
+  // PDF rendering is CPU-bound and reads whole documents. Loose enough that
+  // exporting every technology in one sitting is fine, tight enough that a
+  // script cannot pin a function on it.
+  export: { limit: 60, windowMs: 60 * 60 * 1000 },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitResult = {

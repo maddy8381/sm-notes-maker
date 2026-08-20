@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { TechIcon } from "@/components/layout/tech-icon";
 import { CreatePageButton } from "@/components/pages/create-page-button";
 import { PageList } from "@/components/pages/page-list";
+import { ExportTechnologyButton } from "@/components/technology/export-technology-button";
 import { requireUser } from "@/lib/dal";
 import { pluralize } from "@/lib/utils";
 import { listPagesForTechnology } from "@/server/pages";
@@ -63,10 +64,16 @@ export default async function TechnologyPage({ params }: Params) {
         </div>
 
         {pages.length > 0 ? (
-          <CreatePageButton
-            technologyId={technology.id}
-            technologySlug={technology.slug}
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            <ExportTechnologyButton
+              technologyId={technology.id}
+              name={technology.name}
+            />
+            <CreatePageButton
+              technologyId={technology.id}
+              technologySlug={technology.slug}
+            />
+          </div>
         ) : null}
       </header>
 

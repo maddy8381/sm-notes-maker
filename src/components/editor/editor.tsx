@@ -66,7 +66,7 @@ export function Editor({
         }
 
         replaceImageSrc(instance, objectUrl, {
-          src: result.url,
+          src: result.src,
           width: result.width,
           height: result.height,
         });
@@ -200,7 +200,10 @@ export function Editor({
       ) : null}
 
       {uploading > 0 ? (
-        <p className="text-muted-foreground py-2 text-xs" aria-live="polite">
+        <p
+          className="tn-print-hide text-muted-foreground py-2 text-xs"
+          aria-live="polite"
+        >
           Uploading {uploading} {uploading === 1 ? "image" : "images"}…
         </p>
       ) : null}
@@ -216,7 +219,7 @@ export function Editor({
       />
 
       {editable ? (
-        <p className="border-border text-muted-foreground border-t pt-3 text-xs">
+        <p className="tn-print-hide border-border text-muted-foreground border-t pt-3 text-xs">
           {editor.storage.characterCount.words()} words ·{" "}
           {editor.storage.characterCount.characters()} characters
         </p>

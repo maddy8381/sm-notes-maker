@@ -2,11 +2,20 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 /**
- * Blob uploads land on a per-store subdomain of blob.vercel-storage.com. Both
- * `next/image` and the editor's image `src` allowlist read from this, so the
- * set of hosts an image may come from is defined exactly once.
+ * Where a client upload actually goes.
+ *
+ * `@vercel/blob`'s browser client does not PUT to the store subdomain — it
+ * POSTs the file to Vercel's own API at https://vercel.com/api/blob and gets
+ * redirected on to the storage host. Leaving vercel.com out of connect-src
+ * means every upload is blocked by our own CSP, the editor keeps its optimistic
+ * `blob:` placeholder, and the note is saved with an image node the allowlist
+ * then strips — an image that silently disappears on reload.
  */
-export const BLOB_IMAGE_HOSTNAME = "*.public.blob.vercel-storage.com";
+const BLOB_UPLOAD_ORIGINS = [
+  "https://vercel.com",
+  // Multipart uploads for larger files address the store host directly.
+  "https://*.blob.vercel-storage.com",
+].join(" ");
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -20,9 +29,12 @@ const csp = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data: https://*.public.blob.vercel-storage.com",
+  // No storage host: blobs are private, so every image is served by this app
+  // from /api/images. `blob:` stays for the editor's optimistic preview while
+  // an upload is still in flight.
+  "img-src 'self' blob: data:",
   "font-src 'self' data:",
-  `connect-src 'self' https://*.public.blob.vercel-storage.com${isDev ? " ws: wss:" : ""}`,
+  `connect-src 'self' ${BLOB_UPLOAD_ORIGINS}${isDev ? " ws: wss:" : ""}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -32,9 +44,6 @@ const csp = [
 const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(import.meta.dirname),
-  },
-  images: {
-    remotePatterns: [{ protocol: "https", hostname: BLOB_IMAGE_HOSTNAME }],
   },
   async headers() {
     return [

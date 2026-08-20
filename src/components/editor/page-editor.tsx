@@ -125,7 +125,7 @@ export function PageEditor({
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-6 md:px-8">
+    <div className="tn-print-page mx-auto max-w-3xl px-4 py-6 md:px-8">
       <div className="tn-print-hide">
         <nav
           aria-label="Breadcrumb"

@@ -72,7 +72,7 @@ export function Toolbar({
   }, [editor]);
 
   return (
-    <div className="border-border bg-background/90 sticky top-14 z-20 -mx-1 flex flex-wrap items-center gap-0.5 border-b px-1 py-1.5 backdrop-blur-md">
+    <div className="tn-print-hide border-border bg-background/90 sticky top-14 z-20 -mx-1 flex flex-wrap items-center gap-0.5 border-b px-1 py-1.5 backdrop-blur-md">
       <Group>
         <Item
           onClick={() => editor.chain().focus().undo().run()}

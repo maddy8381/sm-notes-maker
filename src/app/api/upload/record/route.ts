@@ -45,9 +45,11 @@ export async function POST(request: NextRequest) {
   }
 
   // Only accept URLs on our own blob host. Without this the table could be
-  // filled with references to arbitrary external images.
+  // filled with references to arbitrary external images — and since this table
+  // is what authorizes reads through /api/images, a row pointing anywhere else
+  // would be worse than useless.
   const host = new URL(parsed.data.url).hostname;
-  if (!host.endsWith(".public.blob.vercel-storage.com")) {
+  if (!host.endsWith(".blob.vercel-storage.com")) {
     return NextResponse.json({ error: "Unexpected upload host" }, { status: 400 });
   }
 

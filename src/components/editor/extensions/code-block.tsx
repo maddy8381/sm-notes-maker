@@ -74,7 +74,7 @@ function CodeBlockView({ node, updateAttributes, editor }: NodeViewProps) {
 
   return (
     <NodeViewWrapper className="group relative my-4">
-      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <div className="tn-print-hide absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
         <select
           value={language}
           onChange={(event) => updateAttributes({ language: event.target.value })}

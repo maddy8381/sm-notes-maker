@@ -6,7 +6,9 @@ import {
   Copy,
   Download,
   FileDown,
+  FileText,
   FolderInput,
+  Layers,
   MoreHorizontal,
   Printer,
   Trash2,
@@ -14,6 +16,7 @@ import {
 import { toast } from "sonner";
 
 import { deletePage, duplicatePage } from "@/app/(app)/actions";
+import { usePdfDownload } from "@/components/export/use-pdf-download";
 import { MovePageDialog } from "@/components/pages/move-page-dialog";
 import {
   AlertDialog,
@@ -50,6 +53,7 @@ export function PageMenu({
   const [, startTransition] = useTransition();
   const [moveOpen, setMoveOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const pdf = usePdfDownload();
 
   function download(filename: string, contents: string, type: string) {
     const blob = new Blob([contents], { type });
@@ -77,6 +81,35 @@ export function PageMenu({
       JSON.stringify({ title, content: page.content }, null, 2),
       "application/json",
     );
+  }
+
+  function exportPdf() {
+    void (async () => {
+      // Same reason as `duplicate`: the PDF is rendered from stored content,
+      // so anything still sitting in the editor has to be saved first.
+      await onBeforeNavigate();
+      await pdf.download({
+        url: `/api/export/pages/${page.id}`,
+        filename: `${slugForFile(title)}.pdf`,
+        label: "PDF",
+      });
+    })();
+  }
+
+  /**
+   * The whole collection this page belongs to, bound into one PDF. Offered
+   * here as well as on the technology screen because "give me everything on
+   * this subject" is a thought that arrives while reading one page of it.
+   */
+  function exportTechnologyPdf() {
+    void (async () => {
+      await onBeforeNavigate();
+      await pdf.download({
+        url: `/api/export/technologies/${page.technology.id}`,
+        filename: `${slugForFile(page.technology.name)}-notes.pdf`,
+        label: `${page.technology.name} PDF`,
+      });
+    })();
   }
 
   function duplicate() {
@@ -128,16 +161,23 @@ export function PageMenu({
 
           <DropdownMenuSeparator />
 
+          <DropdownMenuItem disabled={pdf.pending} onSelect={exportPdf}>
+            <FileText /> Download this page as PDF
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={pdf.pending} onSelect={exportTechnologyPdf}>
+            <Layers /> Download all {page.technology.name} pages
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={exportMarkdown}>
             <FileDown /> Export as Markdown
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={exportJson}>
             <Download /> Export as JSON
           </DropdownMenuItem>
-          {/* Print rather than a server-side renderer: the browser already has
-              the fonts and styles, and it avoids shipping headless Chrome. */}
+          {/* Kept alongside the PDF download: printing uses the browser's own
+              renderer, which is the better answer when someone wants the page
+              exactly as it looks on screen. */}
           <DropdownMenuItem onSelect={() => window.print()}>
-            <Printer /> Print / Save as PDF
+            <Printer /> Print…
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />

@@ -64,7 +64,7 @@ export function AppShell({
 
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="border-border bg-background/85 sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b px-3 backdrop-blur-md md:px-4">
+      <header className="tn-print-hide border-border bg-background/85 sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b px-3 backdrop-blur-md md:px-4">
         <button
           type="button"
           onClick={() => setDrawerOpen((open) => !open)}
@@ -110,7 +110,7 @@ export function AppShell({
       </header>
 
       <div className="flex flex-1">
-        <aside className="border-border hidden w-60 shrink-0 border-r md:block">
+        <aside className="tn-print-hide border-border hidden w-60 shrink-0 border-r md:block">
           <div className="sticky top-14 h-[calc(100dvh-3.5rem)]">
             <SidebarContent
               technologies={technologies}
@@ -122,7 +122,7 @@ export function AppShell({
         {/* Mobile drawer */}
         <div
           className={cn(
-            "fixed inset-0 z-40 md:hidden",
+            "tn-print-hide fixed inset-0 z-40 md:hidden",
             drawerOpen ? "pointer-events-auto" : "pointer-events-none",
           )}
         >

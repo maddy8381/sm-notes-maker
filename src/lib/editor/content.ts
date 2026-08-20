@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { imageSrcForPathname, pathnameFromImageSrc } from "@/lib/editor/image-src";
 import {
   ALLOWED_LINK_PROTOCOLS,
   MARK_TYPES,
@@ -87,6 +88,13 @@ export function validateDoc(input: unknown): ValidationResult {
 
     const attrs = sanitizeAttrs(node.type as NodeType, node.attrs);
     if (attrs) cleaned.attrs = attrs;
+
+    // An image is nothing but its src. When the src does not survive the host
+    // allowlist — a `blob:` placeholder saved while an upload was still in
+    // flight, or one whose upload then failed — keeping the node stores a
+    // permanent ghost: invisible in the editor, and an "[image]" placeholder
+    // in any export. Same reasoning as the link mark above: drop it.
+    if (node.type === "image" && !cleaned.attrs?.src) return null;
 
     if (Array.isArray(node.marks)) {
       const marks = node.marks
@@ -300,9 +308,15 @@ export function sanitizeHref(value: unknown): string | null {
 }
 
 /**
- * Images may only come from this app's own blob storage, or be a data: URI
- * mid-upload (which never reaches the database — the editor swaps in the real
- * URL once the upload resolves).
+ * An image may only be one of two things: a path served by this app's own
+ * image route, or a data: URI.
+ *
+ * Note what is *not* on the list any more — an absolute URL to blob storage.
+ * Uploads go to a private store, whose URLs return 403 to a browser, so the
+ * document holds `/api/images/<pathname>` and the route streams the bytes
+ * after checking the session owns them. Keeping the old host here would leave
+ * a hole for exactly the thing the private store exists to prevent: an image
+ * readable by anyone holding the link.
  */
 export function sanitizeImageSrc(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -312,14 +326,10 @@ export function sanitizeImageSrc(value: unknown): string | null {
 
   if (trimmed.startsWith("data:image/")) return trimmed;
 
-  try {
-    const url = new URL(trimmed);
-    if (url.protocol !== "https:") return null;
-    if (!url.hostname.endsWith(".public.blob.vercel-storage.com")) return null;
-    return trimmed;
-  } catch {
-    return null;
-  }
+  // Round-tripped rather than pattern-matched: whatever survives is exactly
+  // what the route will resolve, so the two cannot drift apart.
+  const pathname = pathnameFromImageSrc(trimmed);
+  return pathname ? imageSrcForPathname(pathname) : null;
 }
 
 /** Hex or a short rgb()/hsl() — never a url() or an arbitrary CSS expression. */

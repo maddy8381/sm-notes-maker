@@ -44,6 +44,34 @@ describe("validateDoc", () => {
     expect(types).toEqual(["paragraph"]);
   });
 
+  it("drops an image whose src did not survive the allowlist", () => {
+    // The editor shows an uploading image through a local object URL. If a
+    // save lands while that is still the src — or the upload then fails — an
+    // image node with no usable src would otherwise be stored forever:
+    // invisible in the editor, an "[image]" placeholder in every export.
+    const result = validateDoc(
+      doc(
+        para("kept"),
+        { type: "image", attrs: { src: "blob:http://localhost:3000/abc-123" } },
+        { type: "image", attrs: { alt: "no src at all" } },
+        // A private store's own URL is not usable either: it answers 403 to a
+        // browser, so only the app's image route may appear here.
+        {
+          type: "image",
+          attrs: { src: "https://a.private.blob.vercel-storage.com/x.png" },
+        },
+        { type: "image", attrs: { src: "/api/images/notes/x-abc123.png" } },
+      ),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const types = (result.doc.content ?? []).map((node) => node.type);
+    expect(types).toEqual(["paragraph", "image"]);
+    expect(result.doc.content?.[1]?.attrs?.src).toBe("/api/images/notes/x-abc123.png");
+  });
+
   it("drops marks that are not on the allowlist", () => {
     const result = validateDoc(doc(para("text", [{ type: "onclick" }])));
 
@@ -132,7 +160,7 @@ describe("docJsonStringSchema", () => {
       {
         type: "image",
         attrs: {
-          src: "https://a.public.blob.vercel-storage.com/x.png",
+          src: "/api/images/x-abc123.png",
           width: 320,
           caption: "diagram",
           align: "left",
@@ -211,9 +239,23 @@ describe("sanitizeHref", () => {
 });
 
 describe("sanitizeImageSrc", () => {
-  it("allows our own blob storage", () => {
-    const url = "https://abc123.public.blob.vercel-storage.com/img-x1.png";
-    expect(sanitizeImageSrc(url)).toBe(url);
+  it("allows a path served by our own image route", () => {
+    const src = "/api/images/notes/img-x1.png";
+    expect(sanitizeImageSrc(src)).toBe(src);
+    // Encoded segments round-trip to exactly what the route will resolve.
+    expect(sanitizeImageSrc("/api/images/a%20b/c.png")).toBe("/api/images/a%20b/c.png");
+  });
+
+  it("rejects an absolute URL, including blob storage's own", () => {
+    // Uploads go to a private store: its URLs answer 403 to a browser, so an
+    // absolute URL in a document is either useless or a way back to the
+    // public-host hole the private store exists to close.
+    expect(
+      sanitizeImageSrc("https://abc123.public.blob.vercel-storage.com/img-x1.png"),
+    ).toBeNull();
+    expect(
+      sanitizeImageSrc("https://abc123.private.blob.vercel-storage.com/img-x1.png"),
+    ).toBeNull();
   });
 
   it("rejects an arbitrary external host", () => {
@@ -221,6 +263,16 @@ describe("sanitizeImageSrc", () => {
     // network addresses from whoever opens the note.
     expect(sanitizeImageSrc("https://evil.example/pixel.png")).toBeNull();
     expect(sanitizeImageSrc("http://169.254.169.254/latest/meta-data")).toBeNull();
+  });
+
+  it("rejects traversal and lookalike paths", () => {
+    // The route hands whatever survives here to the Blob SDK as a pathname.
+    expect(sanitizeImageSrc("/api/images/../../etc/passwd")).toBeNull();
+    expect(sanitizeImageSrc("/api/images/%2e%2e/secret.png")).toBeNull();
+    expect(sanitizeImageSrc("/api/images/")).toBeNull();
+    expect(sanitizeImageSrc("/api/imagesx/a.png")).toBeNull();
+    expect(sanitizeImageSrc("//api/images/a.png")).toBeNull();
+    expect(sanitizeImageSrc("/api/images/a.png?download=1")).toBeNull();
   });
 
   it("rejects a host that merely ends with a lookalike suffix", () => {

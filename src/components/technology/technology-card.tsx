@@ -3,10 +3,11 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Pencil, Star, Trash2 } from "lucide-react";
+import { FileDown, MoreHorizontal, Pencil, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { deleteTechnology, setTechnologyFavorite } from "@/app/(app)/actions";
+import { fileSlug, usePdfDownload } from "@/components/export/use-pdf-download";
 import { TechIcon } from "@/components/layout/tech-icon";
 import { RenameTechnologyDialog } from "@/components/technology/rename-technology-dialog";
 import {
@@ -34,6 +35,7 @@ export function TechnologyCard({ technology }: { technology: TechnologySummary }
   const [pending, startTransition] = useTransition();
   const [renameOpen, setRenameOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const pdf = usePdfDownload();
 
   // Optimistic so the star fills the instant it is clicked. The server is the
   // authority; a failure reverts and says so.
@@ -55,6 +57,14 @@ export function TechnologyCard({ technology }: { technology: TechnologySummary }
         setFavorite(!next);
         toast.error(result.error);
       }
+    });
+  }
+
+  function exportPdf() {
+    void pdf.download({
+      url: `/api/export/technologies/${technology.id}`,
+      filename: `${fileSlug(technology.name)}-notes.pdf`,
+      label: `${technology.name} PDF`,
     });
   }
 
@@ -137,6 +147,12 @@ export function TechnologyCard({ technology }: { technology: TechnologySummary }
                   }}
                 >
                   <Pencil /> Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={pdf.pending || technology.pageCount === 0}
+                  onSelect={exportPdf}
+                >
+                  <FileDown /> Download as PDF
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

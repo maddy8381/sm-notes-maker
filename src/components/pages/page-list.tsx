@@ -23,6 +23,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   Copy,
+  FileDown,
   FileText,
   FolderInput,
   GripVertical,
@@ -39,6 +40,7 @@ import {
   reorderPage,
   setPageFavorite,
 } from "@/app/(app)/actions";
+import { fileSlug, usePdfDownload } from "@/components/export/use-pdf-download";
 import { MovePageDialog } from "@/components/pages/move-page-dialog";
 import { RenamePageDialog } from "@/components/pages/rename-page-dialog";
 import {
@@ -164,9 +166,18 @@ function PageRow({
   const [moveOpen, setMoveOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [favorite, setFavorite] = useState(page.isFavorite);
+  const pdf = usePdfDownload();
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: page.id });
+
+  function exportPdf() {
+    void pdf.download({
+      url: `/api/export/pages/${page.id}`,
+      filename: `${fileSlug(page.title)}.pdf`,
+      label: "PDF",
+    });
+  }
 
   function toggleFavorite(event: React.MouseEvent) {
     event.preventDefault();
@@ -297,6 +308,9 @@ function PageRow({
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={duplicate}>
                 <Copy /> Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={pdf.pending} onSelect={exportPdf}>
+                <FileDown /> Download as PDF
               </DropdownMenuItem>
               {otherTechnologies.length > 0 ? (
                 <DropdownMenuItem onSelect={() => setMoveOpen(true)}>

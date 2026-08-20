@@ -59,6 +59,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const body = (await request.json()) as HandleUploadBody;
 
+  // Vercel has to be able to reach the callback, so only an https origin is
+  // worth handing it.
+  const callbackUrl = env.NEXT_PUBLIC_APP_URL.startsWith("https://")
+    ? `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/api/upload`
+    : undefined;
+
   try {
     const result = await handleUpload({
       body,
@@ -69,8 +75,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           allowedContentTypes: ALLOWED_TYPES,
           maximumSizeInBytes: MAX_SIZE,
           // Blob appends a random suffix, so two people uploading
-          // "screenshot.png" cannot collide or overwrite each other.
+          // "screenshot.png" cannot collide or overwrite each other. It also
+          // makes a pathname unguessable, which matters because the pathname
+          // is what a document stores.
           addRandomSuffix: true,
+          // Stated rather than inferred. Vercel can work it out from the
+          // request when deployed, but on localhost it cannot and warns on
+          // every single upload; passing null there says "no webhook" plainly.
+          // Development does not need one — the browser records the attachment
+          // itself, see uploadImage in lib/editor/upload.ts.
+          ...(callbackUrl ? { callbackUrl } : {}),
           // Echoed back to onUploadCompleted. The user id comes from the
           // session here, never from the client payload — otherwise a caller
           // could attribute their upload to somebody else's account.

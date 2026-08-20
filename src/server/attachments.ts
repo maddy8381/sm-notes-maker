@@ -1,8 +1,9 @@
 import "server-only";
 
-import { del } from "@vercel/blob";
+import { del, get } from "@vercel/blob";
 
 import { env } from "@/lib/env";
+import { imageSrcForPathname } from "@/lib/editor/image-src";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -11,7 +12,53 @@ import { prisma } from "@/lib/prisma";
  * The rows exist so that blobs can be attributed to an owner and, more
  * importantly, cleaned up: without a record, an image deleted from a note
  * would sit in storage forever and nothing would know it was orphaned.
+ *
+ * With a private blob store the table earns a second job: it is the only
+ * record of who may read a given blob, so every read goes through
+ * `readAttachmentBytes` below rather than through a URL.
  */
+
+export type AttachmentBytes = {
+  stream: ReadableStream<Uint8Array>;
+  contentType: string;
+  size: number | null;
+  filename: string;
+};
+
+/**
+ * Opens a private blob for one user.
+ *
+ * Returns null both when the blob does not exist and when it belongs to
+ * somebody else — the caller has no way to tell the two apart, which is what
+ * stops this becoming a way to probe which pathnames are real.
+ */
+export async function readAttachmentBytes(
+  userId: string,
+  pathname: string,
+): Promise<AttachmentBytes | null> {
+  const attachment = await prisma.attachment.findFirst({
+    where: { pathname, userId },
+    select: { filename: true, mimeType: true, size: true },
+  });
+
+  if (!attachment) return null;
+  if (!env.BLOB_READ_WRITE_TOKEN) return null;
+
+  const result = await get(pathname, { access: "private" }).catch(() => null);
+  if (!result?.stream) return null;
+
+  return {
+    stream: result.stream,
+    // The stored MIME type is the one the upload route allowlisted. Preferring
+    // it over whatever storage reports keeps a mislabelled blob from being
+    // served back as something the allowlist would have rejected.
+    contentType: attachment.mimeType || result.blob.contentType || "image/png",
+    size: attachment.size > 0 ? attachment.size : (result.blob.size ?? null),
+    // Passed through as stored; making it safe for a header is the caller's
+    // job, and lib/http-headers.ts is the single place that knows how.
+    filename: attachment.filename || "image",
+  };
+}
 
 export async function recordAttachment(
   userId: string,
@@ -98,13 +145,15 @@ export async function deleteOrphanedAttachments(
   let deleted = 0;
 
   for (const attachment of candidates) {
+    // Documents hold the app path, not the storage URL — see lib/editor/
+    // image-src.ts. Searching for the wrong one would find nothing and sweep
+    // away every image that is still on a page.
+    const src = imageSrcForPathname(attachment.pathname);
+
     const referenced = await prisma.page.count({
       where: {
         userId: attachment.userId,
-        OR: [
-          { content: { string_contains: attachment.url } },
-          { coverImage: attachment.url },
-        ],
+        OR: [{ content: { string_contains: src } }, { coverImage: src }],
       },
     });
 
@@ -112,8 +161,10 @@ export async function deleteOrphanedAttachments(
 
     if (!options.dryRun) {
       if (env.BLOB_READ_WRITE_TOKEN) {
+        // By pathname rather than URL: a private blob's URL is not something
+        // anything else in the app holds on to.
         // A blob that is already gone should not stop the sweep.
-        await del(attachment.url).catch(() => undefined);
+        await del(attachment.pathname).catch(() => undefined);
       }
       await prisma.attachment.delete({ where: { id: attachment.id } });
     }

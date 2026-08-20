@@ -223,7 +223,7 @@ describe("code block", () => {
 });
 
 describe("image", () => {
-  const src = "https://abc.public.blob.vercel-storage.com/diagram.png";
+  const src = "/api/images/diagram-abc123.png";
 
   it("keeps width, caption, alt and alignment through a round trip", () => {
     // Everything a user can adjust has to survive reload and copy/paste, or

@@ -275,19 +275,44 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Print / PDF export
+   Print
    ---------------------------------------------------------------------------
-   Exporting to PDF is Cmd+P against these rules rather than a headless browser
-   on the server — no extra dependency, and it uses the fonts already loaded.
+   Printing is the browser's own renderer against these rules — the "download a
+   PDF" path is server-side instead (src/lib/pdf/render.ts). What a printed page
+   must contain is the note itself: its title and its content, and nothing else.
+   Every piece of app chrome carries .tn-print-hide, because a sidebar and a
+   formatting toolbar on paper are pure noise.
 --------------------------------------------------------------------------- */
 @media print {
   .tn-print-hide {
     display: none !important;
   }
 
+  @page {
+    margin: 16mm;
+  }
+
+  /* The screen layout is a sticky header over a scrolling column. On paper
+     none of that applies, and leaving it in produces a clipped first page. */
+  html,
+  body {
+    background: #fff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .tn-print-page {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
   .tn-prose {
     font-size: 11pt;
     color: #000;
+    /* The editor's tall click target is an editing affordance; on paper it is
+       a page of blank space. */
+    min-height: 0 !important;
   }
 
   .tn-prose a {

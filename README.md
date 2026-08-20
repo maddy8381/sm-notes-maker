@@ -147,6 +147,46 @@ Two subtleties worth knowing before changing this code:
   through. `renderSnippet()` in `src/server/search.ts` is what makes the
   snippet safe to render.
 
+### Exporting to PDF
+
+Two downloads: a single note, and a whole technology bound into one document —
+cover page, linked table of contents, then every note in the order the list
+shows, with page numbers running through the lot. The combined export is
+reachable from both ends: the technology screen and its dashboard card, and the
+overflow menu inside any note that belongs to it.
+
+Printing (Cmd+P) is a separate path, using the browser's own renderer against
+the rules at the bottom of `src/app/editor.css`. A printed page contains the
+note and nothing else — every piece of app chrome carries `.tn-print-hide`, so
+the sidebar, the top bar, the formatting toolbar, the breadcrumb, the tag
+editor and the code block's copy button all drop out. `e2e/pdf-export.spec.ts`
+asserts that, because print styles have no runtime a unit test can inspect.
+
+Images are read straight out of private Blob storage server-side, through the
+same owner-checked path the browser uses.
+
+The PDF is drawn directly with `pdf-lib` (`src/lib/pdf/render.ts`) rather than
+by printing HTML in headless Chrome. Chrome renders better, but it is a ~300 MB
+dependency that does not fit in a normal serverless function, and the document
+vocabulary is small and fully known — the same reasoning behind the hand-written
+Markdown converter. Wrapping, nested lists, quote bars that survive a page
+break, code blocks, links and images are all handled in that file.
+
+The trade-offs are real and worth knowing before filing a bug:
+
+- The standard PDF fonts encode WinAnsi only. `→` and `≤` are transliterated,
+  emoji are dropped, and a run of unsupported script (CJK, Devanagari) becomes a
+  single `?`. Embedding a Unicode font is the fix if that starts to matter.
+- Only PNG and JPEG embed. A WebP or AVIF upload renders as a labelled
+  placeholder instead of failing the export.
+- Code blocks are monospaced but not syntax-highlighted.
+- A combined export stops at 200 notes and says so in the footer.
+
+Rendering happens in a Route Handler (`/api/export/pages/[id]`,
+`/api/export/technologies/[id]`) rather than a Server Action, because the
+response is a file rather than a serializable value. Both are scoped to the
+session's user, so an id belonging to another account reads as missing.
+
 ### Search
 
 Two complementary mechanisms, because they fail in opposite directions:
@@ -210,8 +250,58 @@ token minted by `/api/upload` after authenticating the request. The file never
 passes through a serverless function, which sidesteps the 4.5 MB Server Action
 body limit — a limit an ordinary retina screenshot exceeds.
 
+**The store is private**, and that choice shapes everything else. A private
+blob has no URL a browser can load — its storage URL answers 403 — so:
+
+- Documents store `/api/images/<pathname>`, never a storage URL. Signed URLs
+  were the alternative and were rejected: they expire, and a note is not a
+  cache. `src/lib/editor/image-src.ts` owns both directions of that mapping and
+  is the allowlist the write path checks against.
+- `/api/images/[...pathname]` serves the bytes. It authenticates the session,
+  then checks the `Attachment` row before reading anything — ownership is
+  verified _before_ storage is touched, so a stranger's request costs nothing
+  and reveals nothing. Not found and not yours are the same 404 on purpose.
+- The PDF exporter reads through the same owner-checked function rather than
+  fetching a URL, so an export cannot make an outbound request at all.
+- `img-src` is back to `'self' blob: data:` — no storage host anywhere.
+
+The upshot is that an image is exactly as private as the note holding it, which
+is the guarantee every other row in this app already had.
+
 SVG is deliberately not an accepted type: it is a document that can carry
-`<script>`, and it would be served from our own blob host.
+`<script>`, and it would be served from our own origin.
+
+Two things still have to line up or every upload fails, and both fail quietly —
+the editor keeps showing the image from a local object URL until the note is
+reloaded:
+
+- **The CSP must allow the upload origin.** The browser client POSTs the file to
+  `https://vercel.com/api/blob` before being handed on to the store host, so
+  `connect-src` in `next.config.ts` lists both.
+- **The store's access mode must match the code.** `access` is fixed when a
+  store is created and cannot be changed afterwards, so a store created public
+  will reject `access: "private"` uploads and vice versa.
+
+Filenames reach two places that cannot take arbitrary text: the URL (handled by
+`image-src.ts`) and the response headers. HTTP header values are ByteStrings, so
+a single character above U+00FF makes `new Response(...)` throw and the request
+500s with nothing to explain itself — and macOS names every screenshot with
+U+202F, a narrow no-break space, before "AM"/"PM". `src/lib/http-headers.ts`
+builds both `Content-Disposition` and `Content-Type` for that reason, and its
+tests construct real `Response` objects rather than comparing strings.
+
+The client records the attachment **before** it hands the editor a src, and a
+failed record fails the upload. That ordering is load-bearing: the row is what
+authorizes reads, a browser never retries a failed `<img>`, and the resulting
+bug is a nasty one to read — the image is broken on screen while the same note
+exports to PDF perfectly, because by then the row has landed.
+`e2e/image-upload.spec.ts` holds the record call back by four seconds to make
+that race deterministic rather than occasional.
+
+An image whose src does not survive `sanitizeImageSrc` is dropped on save
+rather than stored as an attribute-less node — otherwise a failed upload leaves
+a permanent ghost that is invisible in the editor and an `[image]` placeholder
+in every export.
 
 ---
 
@@ -276,7 +366,7 @@ src/
   app/
     (auth)/              login, signup, forgot/reset password
     (app)/               everything behind requireUser()
-    api/                 search, upload
+    api/                 search, upload, image serving, PDF export
   components/
     editor/              TipTap, toolbar, autosave, node views
     layout/              shell, sidebar, command palette, theme
@@ -285,6 +375,7 @@ src/
     dal.ts               getCurrentUser / requireUser
     safe-action.ts       authedAction wrapper
     editor/              document schema, validation, markdown
+    pdf/                 document -> PDF renderer
     validation/          Zod schemas shared with the client
   server/                the only place Prisma is imported
   proxy.ts               optimistic redirect (Next 16's middleware)

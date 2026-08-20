@@ -1,0 +1,27 @@
+node_modules
+.next
+out
+build
+dist
+
+.env
+.env.local
+.env*.local
+
+src/generated
+
+*.tsbuildinfo
+next-env.d.ts
+
+/playwright-report
+/test-results
+/blob-report
+/playwright/.cache
+
+.DS_Store
+*.pem
+npm-debug.log*
+.vercel
+
+# local verification scripts
+.scratch

@@ -1,0 +1,251 @@
+// SM Notes Maker — personal developer knowledge base.
+//
+// Design rules that hold across every model here:
+//
+//  1. Every user-owned row carries `userId` directly, even when it could be
+//     reached through a parent. That denormalization is deliberate: it lets
+//     every query in src/server/ filter on `userId` without a join, so
+//     isolation is a property of the query itself rather than of the caller
+//     remembering to walk the ownership chain.
+//  2. Deletes are soft (`deletedAt`) for anything holding user writing.
+//     Nothing a user typed disappears because of one misclick.
+//  3. Compound indexes lead with `userId`, since every real query is scoped
+//     to one account.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String  @id @default(cuid())
+  name         String
+  // Always stored lowercased — the app normalizes before writing, so this
+  // unique constraint is genuinely case-insensitive in practice.
+  email        String  @unique
+  passwordHash String
+  avatarUrl    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions       Session[]
+  passwordResets PasswordReset[]
+  technologies   Technology[]
+  pages          Page[]
+  tags           Tag[]
+  attachments    Attachment[]
+  pageViews      PageView[]
+}
+
+// One row per active login. Sessions live in the database (not in a JWT) so
+// they can actually be revoked — "sign out everywhere", or killing a stolen
+// session, is a DELETE rather than a wait for expiry.
+model Session {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // SHA-256 of the opaque token, never the token itself. Someone who reads
+  // this table cannot mint a usable cookie from it.
+  tokenHash String @unique
+
+  expiresAt  DateTime
+  lastUsedAt DateTime @default(now())
+  userAgent  String?
+  ip         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordReset {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String    @unique
+  expiresAt DateTime
+  // Set the moment the token is redeemed, so a reset link works exactly once.
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Fixed-window rate limiting, in Postgres rather than Redis. At this scale the
+// extra infrastructure would cost more than it buys.
+model RateLimit {
+  key         String   @id
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@index([windowStart])
+}
+
+// A "technology" is a top-level collection — React, Postgres, System Design.
+model Technology {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name        String
+  slug        String
+  description String?
+  // Lucide icon name, resolved through an allowlist at render time so a
+  // hand-edited value can never inject a component.
+  icon        String?
+  color       String?
+
+  isFavorite Boolean @default(false)
+  // Fractional index: reordering writes one row, never the whole list.
+  position   Float   @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  pages Page[]
+
+  @@unique([userId, slug])
+  @@index([userId, deletedAt, position])
+  @@index([userId, isFavorite])
+  @@index([userId, updatedAt])
+}
+
+model Page {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  technologyId String
+  technology   Technology @relation(fields: [technologyId], references: [id], onDelete: Cascade)
+
+  // Self-relation for nested pages. The MVP renders a flat list, but having
+  // the column from day one means sub-pages later cost no migration.
+  parentId String?
+  parent   Page?   @relation("PageTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children Page[]  @relation("PageTree")
+
+  title String
+  slug  String
+
+  // ProseMirror document. Storing structured JSON rather than HTML means the
+  // app never has to trust—or sanitize—stored markup: HTML only ever gets
+  // generated from this at render time.
+  content Json @default("{\"type\":\"doc\",\"content\":[]}")
+
+  // Flattened text of `content`, maintained on every save. Exists so the
+  // generated tsvector below has something immutable to index.
+  contentText String @default("")
+
+  coverImage String?
+  isFavorite Boolean @default(false)
+  position   Float   @default(0)
+
+  // Bumped on every write. The editor sends the revision it loaded, so a save
+  // from a stale tab is rejected instead of silently overwriting newer text.
+  revision Int @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  // Generated column, defined in migration 20260819200000_search. Prisma has
+  // no type for it, so it is declared Unsupported and excluded from the
+  // client — nothing reads or writes it except raw search SQL.
+  searchVector Unsupported("tsvector")?
+
+  tags        PageTag[]
+  attachments Attachment[]
+  views       PageView[]
+
+  @@unique([technologyId, slug])
+  @@index([userId, deletedAt, updatedAt])
+  @@index([userId, isFavorite])
+  @@index([technologyId, deletedAt, position])
+  @@index([parentId])
+}
+
+model Tag {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name  String
+  slug  String
+  color String?
+
+  createdAt DateTime @default(now())
+
+  pages PageTag[]
+
+  @@unique([userId, slug])
+  @@index([userId, name])
+}
+
+model PageTag {
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  tagId String
+  tag   Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([pageId, tagId])
+  @@index([tagId])
+}
+
+model Attachment {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Null once the owning page is deleted; the cleanup job uses that plus age
+  // to decide when the underlying blob can go.
+  pageId String?
+  page   Page?   @relation(fields: [pageId], references: [id], onDelete: SetNull)
+
+  url      String
+  pathname String @unique
+  filename String
+  mimeType String
+  size     Int
+  width    Int?
+  height   Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([pageId])
+}
+
+// Recently-viewed. One row per (user, page), upserted on open, so the table
+// stays proportional to what exists rather than to how often it is read.
+model PageView {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  viewedAt DateTime @default(now())
+
+  @@unique([userId, pageId])
+  @@index([userId, viewedAt])
+}

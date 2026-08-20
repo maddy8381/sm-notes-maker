@@ -1,0 +1,325 @@
+/* Typography for the note editor and the read-only renderer.
+   Both use `.tn-prose`, so what you type is exactly what an export or a
+   printed page shows. */
+
+.tn-prose {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--foreground);
+}
+
+.tn-prose > * + * {
+  margin-top: 0.9em;
+}
+
+.tn-prose h1,
+.tn-prose h2,
+.tn-prose h3 {
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  scroll-margin-top: 5rem; /* clears the sticky header when jumping to an anchor */
+}
+
+.tn-prose h1 {
+  font-size: 1.6rem;
+  margin-top: 1.8em;
+}
+.tn-prose h2 {
+  font-size: 1.3rem;
+  margin-top: 1.6em;
+}
+.tn-prose h3 {
+  font-size: 1.1rem;
+  margin-top: 1.4em;
+}
+
+.tn-prose > h1:first-child,
+.tn-prose > h2:first-child,
+.tn-prose > h3:first-child {
+  margin-top: 0;
+}
+
+.tn-prose ul,
+.tn-prose ol {
+  padding-left: 1.5rem;
+}
+.tn-prose ul {
+  list-style: disc;
+}
+.tn-prose ol {
+  list-style: decimal;
+}
+.tn-prose li > * + * {
+  margin-top: 0.4em;
+}
+.tn-prose li::marker {
+  color: var(--muted-foreground);
+}
+
+/* Checklists render as real checkboxes rather than bullets. */
+.tn-prose ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+.tn-prose ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+.tn-prose ul[data-type="taskList"] li > label {
+  margin-top: 0.35em;
+  flex-shrink: 0;
+  user-select: none;
+}
+.tn-prose ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.tn-prose ul[data-type="taskList"] input[type="checkbox"] {
+  accent-color: var(--primary);
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+.tn-prose ul[data-type="taskList"] li[data-checked="true"] > div {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+
+.tn-prose blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+}
+
+.tn-prose hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+.tn-prose a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Inline code, distinct from a code block. */
+.tn-prose code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.875em;
+  background: var(--muted);
+  padding: 0.15em 0.35em;
+  border-radius: 0.25rem;
+}
+
+/* …but not inside one, where the <pre> already provides the background. */
+.tn-prose pre code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+
+.tn-prose pre {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.tn-prose mark {
+  border-radius: 0.2rem;
+  padding: 0.05em 0.15em;
+}
+
+.tn-prose img {
+  border: 1px solid var(--border);
+}
+
+/* Placeholder text on an empty node — only shown where the cursor is, so a
+   long document is not littered with grey prompts. */
+.tn-prose p.is-editor-empty:first-child::before,
+.tn-prose h1.is-empty::before,
+.tn-prose h2.is-empty::before,
+.tn-prose h3.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--muted-foreground);
+}
+
+/* The image node view manages its own margins. */
+.tn-prose .ProseMirror-selectednode {
+  outline: none;
+}
+
+/* Drop indicator while dragging an image to a new position. */
+.tn-prose .ProseMirror-gapcursor::after {
+  border-top-color: var(--foreground);
+}
+
+/* ---------------------------------------------------------------------------
+   Syntax highlighting
+   ---------------------------------------------------------------------------
+   Hand-written rather than importing a highlight.js theme, so the colours come
+   from the same tokens as the rest of the app and both themes stay coherent.
+   Hues are chosen to stay distinguishable for the common forms of colour
+   blindness: the load-bearing contrast is lightness, not hue.
+--------------------------------------------------------------------------- */
+.hljs-comment,
+.hljs-quote {
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag,
+.hljs-formula {
+  color: oklch(52% 0.18 300);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta .hljs-string {
+  color: oklch(48% 0.13 150);
+}
+
+.hljs-number,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-type,
+.hljs-selector-class,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: oklch(52% 0.14 40);
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: oklch(48% 0.16 255);
+}
+
+.hljs-built_in,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-meta {
+  color: oklch(50% 0.15 210);
+}
+
+.hljs-deletion {
+  color: oklch(50% 0.18 25);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-literal,
+.dark .hljs-doctag,
+.dark .hljs-formula {
+  color: oklch(76% 0.14 300);
+}
+
+.dark .hljs-string,
+.dark .hljs-regexp,
+.dark .hljs-addition,
+.dark .hljs-attribute,
+.dark .hljs-meta .hljs-string {
+  color: oklch(78% 0.13 150);
+}
+
+.dark .hljs-number,
+.dark .hljs-variable,
+.dark .hljs-template-variable,
+.dark .hljs-type,
+.dark .hljs-selector-class,
+.dark .hljs-selector-attr,
+.dark .hljs-selector-pseudo {
+  color: oklch(80% 0.12 55);
+}
+
+.dark .hljs-title,
+.dark .hljs-section,
+.dark .hljs-name,
+.dark .hljs-selector-id,
+.dark .hljs-title.class_,
+.dark .hljs-title.function_ {
+  color: oklch(76% 0.13 250);
+}
+
+.dark .hljs-built_in,
+.dark .hljs-symbol,
+.dark .hljs-bullet,
+.dark .hljs-link,
+.dark .hljs-meta {
+  color: oklch(78% 0.12 205);
+}
+
+.dark .hljs-deletion {
+  color: oklch(72% 0.15 25);
+}
+
+/* ---------------------------------------------------------------------------
+   Print / PDF export
+   ---------------------------------------------------------------------------
+   Exporting to PDF is Cmd+P against these rules rather than a headless browser
+   on the server — no extra dependency, and it uses the fonts already loaded.
+--------------------------------------------------------------------------- */
+@media print {
+  .tn-print-hide {
+    display: none !important;
+  }
+
+  .tn-prose {
+    font-size: 11pt;
+    color: #000;
+  }
+
+  .tn-prose a {
+    color: #000;
+    text-decoration: underline;
+  }
+
+  /* Links are useless on paper unless the destination is visible. */
+  .tn-prose a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #555;
+    word-break: break-all;
+  }
+
+  .tn-prose pre {
+    border: 1px solid #ddd;
+    background: #fafafa !important;
+    white-space: pre-wrap;
+    word-break: break-word;
+    page-break-inside: avoid;
+  }
+
+  .tn-prose h1,
+  .tn-prose h2,
+  .tn-prose h3 {
+    page-break-after: avoid;
+  }
+
+  .tn-prose img,
+  .tn-prose blockquote,
+  .tn-prose table {
+    page-break-inside: avoid;
+  }
+}
